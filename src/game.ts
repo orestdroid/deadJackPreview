@@ -9,6 +9,7 @@ export type Card = {
 const ALL_ITEMS = ["Удалить свою карту", "Украсть карту диллера", "+1 своей карте", "-1 своей карте"] as const;
 type item = (typeof ALL_ITEMS)[number];
 
+// todo should be in deck.ts
 class Deck {
     cards: Card[] = [];
 
@@ -75,6 +76,7 @@ export class BlackjackRound {
             this.isRoundOver = true;
             this.match.dealerRoundsWon++;
             this.match.history.push(false);
+            // todo move that 3 lines above into .endMatch method
             this.match.endMatch("Player busts! Dealer wins.");
         }
     }
@@ -93,6 +95,9 @@ export class BlackjackRound {
 
     }
 
+    // todo separate item effects into their own functions
+    // e.g. useRemovePlayerCardItem(cardIndex: number), useStealDealerCardItem(cardIndex: number), etc.
+    // todo item selection part of the code can be moved into Game class
     useItem() {
         if (this.isRoundOver) return;
         if (this.playerItems.length === 0) {
@@ -103,6 +108,9 @@ export class BlackjackRound {
         this.playerItems.forEach((item, index) => {
             itemUsePrompt += `${index}: ${item}\n`;
         });
+        // todo you can extract that prompt logic into its own function
+        // e.g. promptForNumberInput(message: string, maxIndex: number): number | null
+        // will prompt user in infinite loop until valid input is given or user cancels
         let itemIndex = prompt(itemUsePrompt);
         if (itemIndex === null) return;
         else if (isNaN(Number(itemIndex))) return;
@@ -140,15 +148,21 @@ export class BlackjackRound {
         this.checkPlayerPoints();
     }
 
+    // todo this method can just calculate and return the result instead of ending the match itself
+    // e.g. return "player_win" | "dealer_win" | "tie" | "player_bust" | "dealer_bust" | null
+    // and then the caller in Match class can handle the match ending logic
+    // todo also this method can be merged with checkPlayerPoints method
     finishRound() {
         const p = this.getHandValue(this.player);
         const d = this.getHandValue(this.dealer);
+        // todo this line can be moved in Match or Game class
         if (this.match.roundsPlayed % 3 === 0) this.match.game.addItem();
         if (d > 21) {
             this.match.playerRoundsWon++;
             this.match.history.push(true);
             this.isRoundOver = true;
             this.dealerHidden = false;
+            // todo move that 4 lines above into .endMatch method
             return this.match.endMatch("Dealer busts! Player wins.");
 
         }
@@ -171,7 +185,7 @@ export class BlackjackRound {
         return this.match.endMatch("It's a tie!");
     }
 
-
+    // todo should be inlined in updateUI function
     restartButtonSwitch(turn: boolean) {
         const restartBtn = document.getElementById("restart") as HTMLButtonElement | null;
         if (restartBtn) {
@@ -202,6 +216,8 @@ export class Match {
     constructor(game: Game) {
         this.oldDeckIndex = this.currentDeckIndex;
         while (this.currentDeckIndex === this.oldDeckIndex) {
+            // todo random function can be extracted into more friendly function e.g. getRandomInt(max: number): number
+            // todo use ctrl+shift+f to find other instances of Math.random()
             this.currentDeckIndex = Math.floor(Math.random() * DECK_LIBRARY.length);
         }
         this.deck = this.createNewDeck();
@@ -220,7 +236,13 @@ export class Match {
 
     }
 
+    // todo add playerHit and playerStand methods that just call this.round.playerHit / this.round.playerStand
+    // then ask this.round about round result ("player_win" | "dealer_win" | "tie" | "player_bust" | "dealer_bust" | null)
+    // and handle match ending logic here accordingly
+
+
     endMatch(message: string) {
+        // todo shouldn't directly manipulate UI here
         document.getElementById("message")!.textContent = message;
 
         if (this.playerRoundsWon === 3) {
@@ -248,6 +270,13 @@ export class Game {
     constructor() {
         this.match = new Match(this);
     }
+
+  // todo add playerHit and playerStand methods that just call this.match.playerHit / this.match.playerStand
+  // then check in this.match if match is over and handle accordingly
+  // then check if game is over
+
+  // todo add useItem method that will call this.match.round.useItemA or useItemB based on selected item
+
 
     addItem() {
         if (this.playerItems.length < 4)

@@ -38,22 +38,25 @@ updateUI();
 
 
 document.getElementById("hit")!.onclick = () => {
+    // todo should call game.playerHit()
     game.match.round.playerHit()
     updateUI()
 };
 document.getElementById("stand")!.onclick = () => {
+    // todo should call game.playerStand()
     game.match.round.playerStand()
     updateUI()
 };
 document.getElementById("use_item")!.onclick = () => {
+    // todo should call game.useItem()
     game.match.round.useItem()
     updateUI()
 };
 document.getElementById("restart")!.onclick = () => {
     updateUI()
     game.match.round = new BlackjackRound(game.match)
-    game.match.round.restartButtonSwitch(true)
-    game.match.roundsPlayed++;
+    game.match.round.restartButtonSwitch(true)  // todo shouldn't be here
+    game.match.roundsPlayed++;  // todo shouldn't be here
     if(game.match.matchIsOver) game.match = new Match(game);
     document.getElementById("message")!.textContent = "";
     updateUI()
