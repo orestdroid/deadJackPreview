@@ -1,4 +1,24 @@
-import type {Card} from "./game.ts";
+import {type Card, getRandomInt} from "./game.ts";
+
+export class Deck {
+    cards: Card[] = [];
+
+    constructor(cards: Card[]) {
+        this.cards = [...cards];
+        this.shuffle();
+    }
+
+    shuffle() {
+        for (let i = this.cards.length - 1; i > 0; i--) {
+            const j = getRandomInt(i + 1);
+            [this.cards[i], this.cards[j]] = [this.cards[j], this.cards[i]];
+        }
+    }
+
+    draw(): Card {
+        return this.cards.pop()!;
+    }
+}
 
 function generateStandard52(): Card[] {
     const values = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];

@@ -1,4 +1,4 @@
-import {DECK_LIBRARY} from "./deck.ts";
+import {Deck, DECK_LIBRARY} from "./deck.ts";
 
 export type Card = {
     value: string;
@@ -9,27 +9,6 @@ export type Card = {
 const ALL_ITEMS = ["Удалить свою карту", "Украсть карту диллера", "+1 своей карте", "-1 своей карте"] as const;
 type item = (typeof ALL_ITEMS)[number];
 
-// todo should be in deck.ts
-class Deck {
-    cards: Card[] = [];
-
-    constructor(cards: Card[]) {
-        this.cards = [...cards];
-        this.shuffle();
-    }
-
-    shuffle() {
-        for (let i = this.cards.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [this.cards[i], this.cards[j]] = [this.cards[j], this.cards[i]];
-        }
-    }
-
-    draw(): Card {
-        return this.cards.pop()!;
-    }
-}
-
 export class BlackjackRound {
 
     player: Card[];
@@ -37,6 +16,7 @@ export class BlackjackRound {
     isRoundOver = false;
     dealerHidden = true;
     public match: Match;
+    isPlayerStand = false;
 
 
     constructor(match: Match) {
@@ -49,6 +29,7 @@ export class BlackjackRound {
         this.player.push(this.match.popDeck());
         this.dealer.push(this.match.popDeck());
         this.dealer.push(this.match.popDeck());
+        this.isPlayerStand = false;
     }
 
     get playerItems() {
@@ -68,17 +49,6 @@ export class BlackjackRound {
     playerHit() {
         if (this.isRoundOver) return;
         this.player.push(this.match.popDeck());
-        this.checkPlayerPoints();
-    }
-
-    checkPlayerPoints() {
-        if (this.getHandValue(this.player) > 21) {
-            this.isRoundOver = true;
-            this.match.dealerRoundsWon++;
-            this.match.history.push(false);
-            // todo move that 3 lines above into .endMatch method
-            this.match.endMatch("Player busts! Dealer wins.");
-        }
     }
 
     playerStand() {
@@ -91,113 +61,55 @@ export class BlackjackRound {
                 this.dealer.push(this.match.popDeck());
             }
         }
-        this.finishRound();
-
+        this.isPlayerStand = true;
     }
 
-    // todo separate item effects into their own functions
-    // e.g. useRemovePlayerCardItem(cardIndex: number), useStealDealerCardItem(cardIndex: number), etc.
-    // todo item selection part of the code can be moved into Game class
-    useItem() {
-        if (this.isRoundOver) return;
-        if (this.playerItems.length === 0) {
-            document.getElementById("message")!.textContent = "No items to use!";
-            return;
-        }
-        let itemUsePrompt = "Какой предмет использовать?\n";
-        this.playerItems.forEach((item, index) => {
-            itemUsePrompt += `${index}: ${item}\n`;
-        });
-        // todo you can extract that prompt logic into its own function
-        // e.g. promptForNumberInput(message: string, maxIndex: number): number | null
-        // will prompt user in infinite loop until valid input is given or user cancels
-        let itemIndex = prompt(itemUsePrompt);
-        if (itemIndex === null) return;
-        else if (isNaN(Number(itemIndex))) return;
-        else if (+itemIndex >= this.playerItems.length) return;
-        const item = this.playerItems[+itemIndex];
-        this.playerItems.splice(+itemIndex, 1);
-        document.getElementById("message")!.textContent = `Used item: ${item}`;
 
-        if (item === "Удалить свою карту") {
-            let itemUsePrompt = prompt("Какую карту удалить?\n(Нумерация с 0)");
-            if (itemUsePrompt === null) return;
-            else if (isNaN(Number(itemUsePrompt))) return;
-            else if (+itemUsePrompt < this.player.length) this.player.splice(+itemUsePrompt, 1);
-        } else if (item === "Украсть карту диллера") {
-            let itemUsePrompt = prompt("Какую карту украсть?\n(Нумерация с 0)");
-            if (itemUsePrompt === null) return;
-            else if (isNaN(Number(itemUsePrompt))) return;
-            else if (+itemUsePrompt < this.dealer.length) {
-                this.player.push(this.dealer[+itemUsePrompt]);
-                this.dealer.splice(+itemUsePrompt, 1);
-                this.dealer.push(this.match.popDeck());
-            }
-
-        } else if (item === "+1 своей карте") {
-            let itemUsePrompt = prompt("К какой карте добавить 1?\n(Нумерация с 0)");
-            if (itemUsePrompt === null) return;
-            else if (isNaN(Number(itemUsePrompt))) return;
-            else if (+itemUsePrompt < this.player.length) this.player[+itemUsePrompt].weight += 1;
-        } else if (item === "-1 своей карте") {
-            let itemUsePrompt = prompt("У какой карты отнять 1?\n(Нумерация с 0)");
-            if (itemUsePrompt === null) return;
-            else if (isNaN(Number(itemUsePrompt))) return;
-            else if (+itemUsePrompt < this.player.length) this.player[+itemUsePrompt].weight -= 1;
-        }
-        this.checkPlayerPoints();
+    useRemovePlayerCardItem(cardIndex: number) {
+        this.player.splice(cardIndex, 1);
     }
 
-    // todo this method can just calculate and return the result instead of ending the match itself
-    // e.g. return "player_win" | "dealer_win" | "tie" | "player_bust" | "dealer_bust" | null
-    // and then the caller in Match class can handle the match ending logic
-    // todo also this method can be merged with checkPlayerPoints method
-    finishRound() {
+    useStealDealerCardItem(cardIndex: number) {
+        this.player.push(this.dealer[cardIndex]);
+        this.dealer.splice(cardIndex, 1);
+        this.dealer.push(this.match.popDeck());
+    }
+
+    useAddOneToPlayerCardItem(cardIndex: number) {
+        this.player[cardIndex].weight += 1
+    }
+
+    useSubtractOneFromPlayerCardItem(cardIndex: number) {
+        this.player[cardIndex].weight -= 1
+    }
+
+    checkRound() {
         const p = this.getHandValue(this.player);
         const d = this.getHandValue(this.dealer);
-        // todo this line can be moved in Match or Game class
-        if (this.match.roundsPlayed % 3 === 0) this.match.game.addItem();
-        if (d > 21) {
-            this.match.playerRoundsWon++;
-            this.match.history.push(true);
-            this.isRoundOver = true;
-            this.dealerHidden = false;
-            // todo move that 4 lines above into .endMatch method
-            return this.match.endMatch("Dealer busts! Player wins.");
-
+        if (p > 21) {
+            return "player_burst";
         }
+        if (d > 21) {
+            return "dealer_burst";
+        }
+        if (!this.isPlayerStand) return null;
         if (p > d) {
-            this.match.playerRoundsWon++;
-            this.match.history.push(true);
-            this.isRoundOver = true;
-            this.dealerHidden = false;
-            return this.match.endMatch("Player wins!");
+            return "player_win";
         }
         if (d > p) {
-            this.match.dealerRoundsWon++;
-            this.match.history.push(false);
-            this.isRoundOver = true;
-            this.dealerHidden = false;
-            return this.match.endMatch("Dealer wins!");
+            return "dealer_win";
         }
-        this.isRoundOver = true;
-        this.dealerHidden = false;
-        return this.match.endMatch("It's a tie!");
-    }
-
-    // todo should be inlined in updateUI function
-    restartButtonSwitch(turn: boolean) {
-        const restartBtn = document.getElementById("restart") as HTMLButtonElement | null;
-        if (restartBtn) {
-            restartBtn.disabled = turn;
-            restartBtn.setAttribute("aria-disabled", "false");
+        if (d === p) {
+            return "tie";
         }
+        return null;
     }
 }
 
 export class Match {
     deck: Deck;
-    roundsPlayed = 1;
+    roundsPlayedInMatch = 1;
+    roundsPlayedInGame = 1;
     playerRoundsWon = 0;
     dealerRoundsWon = 0;
     currentDeckIndex = 0;
@@ -216,9 +128,7 @@ export class Match {
     constructor(game: Game) {
         this.oldDeckIndex = this.currentDeckIndex;
         while (this.currentDeckIndex === this.oldDeckIndex) {
-            // todo random function can be extracted into more friendly function e.g. getRandomInt(max: number): number
-            // todo use ctrl+shift+f to find other instances of Math.random()
-            this.currentDeckIndex = Math.floor(Math.random() * DECK_LIBRARY.length);
+            this.currentDeckIndex = getRandomInt(DECK_LIBRARY.length);
         }
         this.deck = this.createNewDeck();
         this.game = game;
@@ -236,27 +146,41 @@ export class Match {
 
     }
 
-    // todo add playerHit and playerStand methods that just call this.round.playerHit / this.round.playerStand
-    // then ask this.round about round result ("player_win" | "dealer_win" | "tie" | "player_bust" | "dealer_bust" | null)
-    // and handle match ending logic here accordingly
+    playerHit() {
+        this.round.playerHit();
+    }
 
+    playerStand() {
+        this.round.playerStand();
+    }
 
-    endMatch(message: string) {
-        // todo shouldn't directly manipulate UI here
-        document.getElementById("message")!.textContent = message;
+    checkMatch() {
+        const roundStatus = this.round.checkRound()
+        if (roundStatus === null) return null;
+        this.round.isRoundOver = true;
+        if (this.roundsPlayedInGame % 3 === 0) this.game.addItem();
+        this.roundsPlayedInMatch++;
+        this.roundsPlayedInGame++;
+        this.round.dealerHidden = false;
+        if (roundStatus === "player_win" || roundStatus === "dealer_burst") {
+            this.playerRoundsWon++;
+            this.history.push(true);
+        } else if (roundStatus === "dealer_win" || roundStatus === "player_burst") {
+            this.dealerRoundsWon++;
+            this.history.push(false);
+        } else return null;
 
         if (this.playerRoundsWon === 3) {
-            document.getElementById("message")!.textContent = "Get your point loser";
-            this.game.playerScore++;
             this.matchIsOver = true;
-            this.game.resetGame();
+            this.roundsPlayedInGame = 0;
+            return "player_won_match"
         }
         if (this.dealerRoundsWon === 3) {
-            document.getElementById("message")!.textContent = "Better luck next time";
-            this.game.playerHealth -= 1;
             this.matchIsOver = true;
-            this.game.resetGame();
+            this.roundsPlayedInGame = 0;
+            return "dealer_won_match"
         }
+        return null;
     }
 }
 
@@ -266,38 +190,109 @@ export class Game {
     playerScore = 0;
     playerItems: item[] = [];
     match: Match;
+    matchStatus = ""
+
 
     constructor() {
         this.match = new Match(this);
     }
 
-  // todo add playerHit and playerStand methods that just call this.match.playerHit / this.match.playerStand
-  // then check in this.match if match is over and handle accordingly
-  // then check if game is over
+    playerHit() {
+        this.match.playerHit();
+        this.checkGame()
+    }
 
-  // todo add useItem method that will call this.match.round.useItemA or useItemB based on selected item
-
+    playerStand() {
+        this.match.playerStand();
+        this.checkGame()
+    }
 
     addItem() {
         if (this.playerItems.length < 4)
-            this.playerItems.push(ALL_ITEMS[Math.floor(Math.random() * ALL_ITEMS.length)]);
+            this.playerItems.push(ALL_ITEMS[getRandomInt(ALL_ITEMS.length)]);
 
     }
 
-    resetGame() {
+    checkUsersItems() {
+        if (this.playerItems.length === 0) {
+            return "No items to use!";
+        }
+    }
+
+    useItem() {
+        const round = this.match.round;
+        if (round.isRoundOver) return;
+
+        this.match.game.checkUsersItems()
+
+        let itemIndex = promptForNumberInput(`Какую карту использовать:\n
+        ${this.playerItems.map((item, index) =>
+            `${index + 1}: ${item}`).join("\n")}`, this.playerItems.length);
+        if (itemIndex === null) return;
+
+        const item = this.playerItems[+itemIndex];
+        this.playerItems.splice(+itemIndex, 1);
+        document.getElementById("message")!.textContent = `Used item: ${item}`;
+
+        if (item === "Удалить свою карту") {
+            let itemUsePrompt = promptForNumberInput("Какую карту удалить?\n", round.player.length);
+            if (itemUsePrompt === null) return;
+            round.useRemovePlayerCardItem(itemUsePrompt);
+        } else if (item === "Украсть карту диллера") {
+            let itemUsePrompt = promptForNumberInput("Какую карту украсть?\n", round.dealer.length);
+            if (itemUsePrompt === null) return;
+            round.useStealDealerCardItem(itemUsePrompt);
+        } else if (item === "+1 своей карте") {
+            let itemUsePrompt = promptForNumberInput("К какой карте добавить 1?\n", round.player.length);
+            if (itemUsePrompt === null) return;
+            round.useAddOneToPlayerCardItem(itemUsePrompt);
+        } else if (item === "-1 своей карте") {
+            let itemUsePrompt = promptForNumberInput("У какой карты отнять 1?\n", round.player.length);
+            if (itemUsePrompt === null) return;
+            round.useSubtractOneFromPlayerCardItem(itemUsePrompt);
+        }
+        this.checkGame();
+    }
+
+    checkGame() {
+        const matchResult = this.match.checkMatch();
+        if (matchResult === null) return;
+        else if (matchResult === "player_won_match") {
+            this.playerScore++;
+            this.matchStatus = "player_won_match"
+        } else {
+            this.playerHealth--;
+            this.matchStatus = "dealer_won_match";
+        }
 
         if (this.playerHealth <= 0) {
             this.playerScore = 0;
             this.playerItems = [];
             this.playerHealth = 10;
-            alert("Game Over! You have no health left.");
+            alert("GIT GUD 💀");
         }
         if (this.playerScore >= 10) {
             this.playerScore = 0;
             this.playerItems = [];
             this.playerHealth = 10;
-            alert("Congratulations! You reached 10 points and won the game!");
+            alert("Поздравляю с победой");
         }
+        return;
     }
-
 }
+
+function promptForNumberInput(message: string, maxIndex: number | null) {
+    while (true) {
+        let itemIndex = prompt(message);
+        if (itemIndex === null) return null;
+        else if (isNaN(Number(itemIndex))) continue;
+        else if (+itemIndex > maxIndex!) continue;
+        else if (+itemIndex <= 0) continue;
+        else return +itemIndex - 1;
+    }
+}
+
+export function getRandomInt(maxNumber: number) {
+    return Math.floor(Math.random() * maxNumber);
+}
+
