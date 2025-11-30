@@ -106,11 +106,11 @@ export const DECK_LIBRARY: { name: string; cards: Card[] }[] = [
         cards: generateStandard52()
     },
     {
-        name: "Short Deck 36",
+        name: "No 6-10 Cards Deck",
         cards: generateShortDeck()
     },
     {
-        name: "Face & Ace Deck",
+        name: "All Face = Ace Deck",
         cards: generateFaceAceDeck()
     },
     {
